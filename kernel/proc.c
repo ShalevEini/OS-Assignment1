@@ -603,6 +603,63 @@ kill(int pid)
   return -1;
 }
 
+int
+co_yield(int pid, int value)
+{
+  struct proc *p = myproc();
+  struct proc *target = 0;
+  int ret = -1;
+
+  if(pid <= 0 || value <= 0)
+    return -1;
+  if(pid == p->pid)
+    return -1;
+
+  // Find target process and lock it.
+  for(target = proc; target < &proc[NPROC]; target++){
+    acquire(&target->lock);
+    if(target->pid == pid && target->state != UNUSED)
+      break;
+    release(&target->lock);
+  }
+
+  if(target == &proc[NPROC])
+    return -1;
+
+  // Reject dead / invalid targets.
+  if(target->killed || target->state == ZOMBIE){
+    release(&target->lock);
+    return -1;
+  }
+
+  // Lock current process too.
+  acquire(&p->lock);
+
+  // Default return value in case we wake up due to error/kill.
+  p->trapframe->a0 = -1;
+
+  // If target is already waiting for me, complete the handoff.
+  if(target->state == SLEEPING && target->chan == p){
+    target->trapframe->a0 = value;
+    target->state = RUNNABLE;
+  }
+
+  // Now current process waits for target to yield back.
+  p->chan = target;
+  p->state = SLEEPING;
+
+  release(&target->lock);
+
+  sched();
+
+  // We resumed because somebody made us RUNNABLE again.
+  ret = p->trapframe->a0;
+  p->chan = 0;
+
+  release(&p->lock);
+  return ret;
+}
+
 void
 setkilled(struct proc *p)
 {

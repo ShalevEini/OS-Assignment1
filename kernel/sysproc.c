@@ -95,3 +95,14 @@ sys_memsize(void)
 {
   return myproc()->sz;
 }
+
+uint64
+sys_co_yield(void)
+{
+  int pid, value;
+
+  argint(0, &pid);
+  argint(1, &value);
+
+  return co_yield(pid, value);
+}
