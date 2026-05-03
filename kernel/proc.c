@@ -627,7 +627,7 @@ co_yield(int pid, int value)
   if(target == &proc[NPROC])
     return -1;
 
-  // Reject dead / invalid targets.
+  // Reject dead or invalid targets.
   if(target->killed || target->state == ZOMBIE){
     release(&target->lock);
     return -1;
