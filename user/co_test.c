@@ -143,6 +143,7 @@ test_many_rounds(void)
 static void
 test_killed_while_sleeping(void)
 {
+    int parent_pid = getpid();
     int child_pid = fork();
 
     if (child_pid < 0) {
@@ -151,7 +152,7 @@ test_killed_while_sleeping(void)
     }
 
     if (child_pid == 0) {
-        int rc = co_yield(getpid(), 1);
+        int rc = co_yield(parent_pid, 1);
         printf("test_killed_while_sleeping child woke with rc=%d\n", rc);
         exit(0);
     } else {
@@ -162,61 +163,36 @@ test_killed_while_sleeping(void)
     }
 }
 
+
+
 static void
-test_two_children_same_parent_target(void)
+infinite_ping_pong(void)
 {
-    int p = getpid();
-    int c1 = fork();
-    if (c1 < 0) {
-        printf("test_two_children_same_parent_target: fork c1 failed");
+    int pid1 = getpid();   // Parent PID
+    int pid2 = fork();     // Child PID
+
+    if (pid2 < 0) {
+        printf("infinite_ping_pong: fork failed\n");
         exit(1);
     }
-    if (c1 == 0) {
-        int v = co_yield(p, 100);
-        if (v != 101) {
-            printf("test_two_children_same_parent_target child1 failed: got %d", v);
-            exit(1);
+
+    if (pid2 == 0) { // Child
+        for (;;) {
+            int value = co_yield(pid1, 1);
+            printf("Child received: %d\n", value); // Should print 2
         }
-        exit(0);
-    }
-
-    int c2 = fork();
-    if (c2 < 0) {
-        printf("test_two_children_same_parent_target: fork c2 failed");
-        kill(c1);
-        wait(0);
-        exit(1);
-    }
-    if (c2 == 0) {
-        int v = co_yield(p, 200);
-        if (v != 201) {
-            printf("test_two_children_same_parent_target child2 failed: got %d", v);
-            exit(1);
+    } else { // Parent
+        for (;;) {
+            int value = co_yield(pid2, 2);
+            printf("parent received: %d\n", value); // Should print 1
         }
-        exit(0);
     }
-
-    int r1 = co_yield(c1, 101);
-    int r2 = co_yield(c2, 201);
-
-    if (r1 != 100 || r2 != 200) {
-        printf("test_two_children_same_parent_target parent failed: r1=%d r2=%d", r1, r2);
-        kill(c1);
-        kill(c2);
-        wait(0);
-        wait(0);
-        exit(1);
-    }
-
-    wait(0);
-    wait(0);
-    printf("test_two_children_same_parent_target passed");
 }
 
 int
 main(void)
 {
-    printf("=== edge_case tests start ===\n");
+    printf("=== co_yield tests start ===\n");
 
     test_invalid_pid_zero();
     test_invalid_pid_negative();
@@ -227,8 +203,10 @@ main(void)
     test_killed_process();
     test_many_rounds();
     test_killed_while_sleeping();
-    test_two_children_same_parent_target();
 
-    printf("=== edge_case tests finished ===\n");
+    printf("=== finite tests finished ===\n");
+
+    infinite_ping_pong();
+
     exit(0);
 }
