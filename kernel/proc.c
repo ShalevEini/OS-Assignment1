@@ -608,6 +608,7 @@ co_yield(int pid, int value)
 {
   struct proc *p = myproc();
   struct proc *target = 0;
+  struct cpu *c = mycpu();
   int ret = -1;
 
   if(pid <= 0 || value <= 0)
@@ -638,21 +639,37 @@ co_yield(int pid, int value)
   // Default return value in case we wake up due to error/kill.
   p->trapframe->a0 = -1;
 
-  // If target is already waiting for me, complete the handoff.
+  // If target is already waiting for me, give it my value.
   if(target->state == SLEEPING && target->chan == p){
     target->trapframe->a0 = value;
-    target->state = RUNNABLE;
   }
 
-  // Now current process waits for target to yield back.
+  // Only continue if target is something we can directly hand off to.
+  if(target->state != RUNNABLE &&
+     !(target->state == SLEEPING && target->chan == p)){
+    release(&p->lock);
+    release(&target->lock);
+    return -1;
+  }
+
+  // Current process now waits for target.
   p->chan = target;
   p->state = SLEEPING;
 
-  release(&target->lock);
+  // Target becomes the running process on this CPU.
+  target->state = RUNNING;
+  c->proc = target;
 
-  sched();
+  // IMPORTANT:
+  // release current process lock, but KEEP target->lock held
+  // across swtch so target resumes with its own lock held.
+  release(&p->lock);
+  swtch(&p->context, &target->context);
 
-  // We resumed because somebody made us RUNNABLE again.
+  // When we get here again, the reverse handoff should have
+  // switched back to us while keeping p->lock held.
+  c->proc = p;
+
   ret = p->trapframe->a0;
   p->chan = 0;
 
