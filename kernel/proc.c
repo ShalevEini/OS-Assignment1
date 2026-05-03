@@ -660,7 +660,6 @@ co_yield(int pid, int value)
   target->state = RUNNING;
   c->proc = target;
 
-  // IMPORTANT:
   // release current process lock, but KEEP target->lock held
   // across swtch so target resumes with its own lock held.
   release(&p->lock);
