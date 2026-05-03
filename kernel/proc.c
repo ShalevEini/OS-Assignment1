@@ -636,10 +636,10 @@ co_yield(int pid, int value)
   // Lock current process too.
   acquire(&p->lock);
 
-  // Default return value in case we wake up due to error/kill.
+  // default return value in case we wake up due to error/kill.
   p->trapframe->a0 = -1;
 
-  // If target is already waiting for me, give it my value.
+  // if target is already waiting for me, give it my value.
   if(target->state == SLEEPING && target->chan == p){
     target->trapframe->a0 = value;
   }
@@ -660,7 +660,7 @@ co_yield(int pid, int value)
   target->state = RUNNING;
   c->proc = target;
 
-  // release current process lock, but KEEP target->lock held
+  // release current process lock
   // across swtch so target resumes with its own lock held.
   release(&p->lock);
   swtch(&p->context, &target->context);
